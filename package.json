@@ -9,7 +9,11 @@
     "dev": "webpack-dev-server --config src/build/webpack.dev.config.js",
     "start": "webpack-dev-server --config src/build/webpack.dev.config.js"
   },
-  "author": "Richard Becker",
+  "author": "Prominent Edge",
+  "contributors": [
+    "Richard Becker",
+    "Tommy Messbauer"
+  ],
   "license": "MIT",
   "optionalDependencies": {
     "fsevents": "^1.2.4"

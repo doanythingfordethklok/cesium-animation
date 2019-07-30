@@ -76,7 +76,7 @@ import {
   LOOP_TYPE
 } from "../cesium_model_animation_player";
 import { calcNodeWorldSpaceTransform } from "../lib/transform";
-import { calculatePositionFromMatrix, calculateOrientationFromMatrix } from "../lib/calc";
+import { calculatePositionFromMatrix, calculateDirectionFromMatrix, calculateOrientationFromMatrix } from "../lib/calc";
 
 export default {
   data() {
@@ -88,7 +88,6 @@ export default {
       tracking_items: {
         current_transform: new Cesium.Matrix4(), // the most recent result of calcWorldSpaceTransform
         debug_axis: null,
-        cone: null,
         selected_node: null // the node which is selected. If null, nothing is shown.
       },
       axis: Cesium.Cartesian3.UNIT_X
@@ -161,7 +160,7 @@ export default {
 
       // initilized geometry for debug axis and cone only once, then re-use it.
       this.tracking_items.debug_axis = this.createDebugAxis();
-      this.tracking_items.cone = this.createCone();
+      this.createCone();
 
       // register hooks for the animation so that attached geometry can use it
       player.addUpdateHook(() => that.updateTransform());
@@ -188,12 +187,12 @@ export default {
     onNodeSelect(e) {
       if (e.target.value === "None") {
         this.tracking_items.selected_node = null;
+        this.viewer.entities.values.forEach(v => (v.show = false));
         this.tracking_items.debug_axis.show = false;
-        this.tracking_items.cone.show = false;
       } else {
         this.tracking_items.selected_node = e.target.value;
+        this.viewer.entities.values.forEach(v => (v.show = true));
         this.tracking_items.debug_axis.show = true;
-        this.tracking_items.cone.show = true;
       }
 
       this.updateTransform();
@@ -210,47 +209,88 @@ export default {
       );
     },
 
-    createCone(matrix) {
-      const that = this;
-      const getPosition = () => {
-        return calculatePositionFromMatrix(that.tracking_items.current_transform);
+    createCone() {
+      const { viewer, tracking_items } = this;
+
+      const getPosition = translation => () => {
+        return calculatePositionFromMatrix(tracking_items.current_transform, translation);
       };
 
       const getOrientation = () => {
-        return calculateOrientationFromMatrix(that.tracking_items.current_transform);
+        return calculateOrientationFromMatrix(tracking_items.current_transform);
       };
 
-      return this.viewer.entities.add({
+      const CONE_LENGTH = 50;
+      viewer.entities.add({
         name: "cone",
-        position: new Cesium.CallbackProperty(getPosition, false),
+        position: new Cesium.CallbackProperty(getPosition(new Cesium.Cartesian3(0, 0, CONE_LENGTH / 2)), false),
         orientation: new Cesium.CallbackProperty(getOrientation, false),
         show: false,
         cylinder: {
-          length: 50.0,
+          length: CONE_LENGTH,
           topRadius: 20.0,
           bottomRadius: 0,
-          material: Cesium.Color.PINK,
+          material: Cesium.Color.PINK.withAlpha(0.3),
           outline: true,
-          outlineColor: Cesium.Color.RED
+          outlineColor: Cesium.Color.RED.withAlpha(0.5)
+        }
+      });
+
+      const LINE_LENGTH = 500;
+      viewer.entities.add({
+        name: "boresight",
+        position: new Cesium.CallbackProperty(getPosition(new Cesium.Cartesian3(0, 0, LINE_LENGTH / 2)), false),
+        orientation: new Cesium.CallbackProperty(getOrientation, false),
+        show: false,
+        cylinder: {
+          length: LINE_LENGTH,
+          topRadius: 1,
+          bottomRadius: 1,
+          material: Cesium.Color.ORANGE,
+          outline: true,
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.5)
         }
       });
     },
 
+    updateBoreSight() {
+      const { tracking_items, viewer } = this;
+      const boresight = this.viewer.entities.values.find(v => v.name == "boresight");
+
+      if (boresight && tracking_items.selected_node !== null) {
+        const ray = calculateDirectionFromMatrix(tracking_items.current_transform, new Cesium.Cartesian3(0, 0, 1));
+        const intersection = viewer.scene.globe.pick(ray, viewer.scene);
+
+        console.log(intersection);
+        if (intersection === undefined) {
+          console.log("no intersection");
+          boresight.cylinder.material = Cesium.Color.ORANGE;
+        } else {
+          console.log("intersection");
+          boresight.cylinder.material = Cesium.Color.PURPLE;
+        }
+      }
+    },
+
     updateTransform() {
+      const { tracking_items, viewer, animation_player, entity } = this;
+
       // updateTransform() can be called any time the main entity is updated (onNodeSelect, animation, etc)
       // it will calculate the world transform and store it so that the code can use it in the CallbackProperty.
 
-      if (this.tracking_items.selected_node !== null) {
-        this.tracking_items.current_transform = calcNodeWorldSpaceTransform(
-          this.animation_player.animation_set,
-          this.entity,
-          this.tracking_items.selected_node
+      if (tracking_items.selected_node !== null) {
+        tracking_items.current_transform = calcNodeWorldSpaceTransform(
+          animation_player.animation_set,
+          entity,
+          tracking_items.selected_node
         );
       }
 
-      if (this.tracking_items.debug_axis) {
-        this.tracking_items.debug_axis.modelMatrix = this.tracking_items.current_transform;
+      if (tracking_items.debug_axis) {
+        tracking_items.debug_axis.modelMatrix = tracking_items.current_transform;
       }
+
+      this.updateBoreSight();
     }
   }
 };

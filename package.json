@@ -24,7 +24,7 @@
     "d3": "^5.7.0",
     "google-protobuf": "^3.6.1",
     "grpc-web": "^1.0.3",
-    "jquery": "^3.3.1",
+    "jquery": "^3.5.0",
     "popper.js": "^1.14.5",
     "socket.io-client": "^2.1.1",
     "tabulator-tables": "^4.1.2",
